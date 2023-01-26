@@ -17,19 +17,16 @@ import {
   Source,
   Tree,
 } from '@angular-devkit/schematics';
-import * as ts from 'typescript';
-import {
-  parseJson,
-  ProjectConfiguration,
-  serializeJson,
-  FileData,
-} from '@nrwl/devkit';
+import type * as ts from 'typescript';
+import { parseJson, serializeJson } from '@nrwl/devkit';
 import { getWorkspacePath } from './cli-config-utils';
-import { extname, join, normalize, Path } from '@angular-devkit/core';
-import type { NxJsonConfiguration, ProjectsConfigurations } from '@nrwl/devkit';
+import { join, Path } from '@angular-devkit/core';
+import type { NxJsonConfiguration } from '@nrwl/devkit';
 import { addInstallTask } from './rules/add-install-task';
 import { findNodes } from 'nx/src/utils/typescript';
 import { getSourceNodes } from '../utilities/typescript/get-source-nodes';
+
+let tsModule: typeof import('typescript');
 
 function nodesByPosition(first: ts.Node, second: ts.Node): number {
   return first.getStart() - second.getStart();
@@ -181,9 +178,12 @@ export function addParameterToConstructor(
   modulePath: string,
   opts: { className: string; param: string }
 ): Change[] {
+  if (!tsModule) {
+    tsModule = require('typescript');
+  }
   const clazz = findClass(source, opts.className);
   const constructor = clazz.members.filter(
-    (m) => m.kind === ts.SyntaxKind.Constructor
+    (m) => m.kind === tsModule.SyntaxKind.Constructor
   )[0];
   if (constructor) {
     throw new Error('Should be tested');
@@ -221,12 +221,15 @@ export function findClass(
   className: string,
   silent: boolean = false
 ): ts.ClassDeclaration {
+  if (!tsModule) {
+    tsModule = require('typescript');
+  }
   const nodes = getSourceNodes(source);
 
   const clazz = <any>(
     nodes.filter(
       (n) =>
-        n.kind === ts.SyntaxKind.ClassDeclaration &&
+        n.kind === tsModule.SyntaxKind.ClassDeclaration &&
         (<any>n).name.text === className
     )[0]
   );
@@ -276,7 +279,10 @@ export function getImport(
   source: ts.SourceFile,
   predicate: (a: any) => boolean
 ): { moduleSpec: string; bindings: string[] }[] {
-  const allImports = findNodes(source, ts.SyntaxKind.ImportDeclaration);
+  if (!tsModule) {
+    tsModule = require('typescript');
+  }
+  const allImports = findNodes(source, tsModule.SyntaxKind.ImportDeclaration);
   const matching = allImports.filter((i: ts.ImportDeclaration) =>
     predicate(i.moduleSpecifier.getText())
   );
@@ -300,7 +306,10 @@ export function addGlobal(
   modulePath: string,
   statement: string
 ): Change[] {
-  const allImports = findNodes(source, ts.SyntaxKind.ImportDeclaration);
+  if (!tsModule) {
+    tsModule = require('typescript');
+  }
+  const allImports = findNodes(source, tsModule.SyntaxKind.ImportDeclaration);
   if (allImports.length > 0) {
     const lastImport = allImports[allImports.length - 1];
     return [
@@ -573,15 +582,18 @@ export function insertImport(
   fileName: string,
   isDefault = false
 ): Change {
+  if (!tsModule) {
+    tsModule = require('typescript');
+  }
   const rootNode = source;
-  const allImports = findNodes(rootNode, ts.SyntaxKind.ImportDeclaration);
+  const allImports = findNodes(rootNode, tsModule.SyntaxKind.ImportDeclaration);
 
   // get nodes that map to import statements from the file fileName
   const relevantImports = allImports.filter((node) => {
     // StringLiteral of the ImportDeclaration is the import file (fileName in this case).
     const importFiles = node
       .getChildren()
-      .filter((child) => child.kind === ts.SyntaxKind.StringLiteral)
+      .filter((child) => child.kind === tsModule.SyntaxKind.StringLiteral)
       .map((n) => (n as ts.StringLiteral).text);
 
     return importFiles.filter((file) => file === fileName).length === 1;
@@ -594,9 +606,9 @@ export function insertImport(
     relevantImports.forEach((n) => {
       Array.prototype.push.apply(
         imports,
-        findNodes(n, ts.SyntaxKind.Identifier)
+        findNodes(n, tsModule.SyntaxKind.Identifier)
       );
-      if (findNodes(n, ts.SyntaxKind.AsteriskToken).length > 0) {
+      if (findNodes(n, tsModule.SyntaxKind.AsteriskToken).length > 0) {
         importsAsterisk = true;
       }
     });
@@ -615,9 +627,12 @@ export function insertImport(
       const fallbackPos =
         findNodes(
           relevantImports[0],
-          ts.SyntaxKind.CloseBraceToken
+          tsModule.SyntaxKind.CloseBraceToken
         )[0].getStart() ||
-        findNodes(relevantImports[0], ts.SyntaxKind.FromKeyword)[0].getStart();
+        findNodes(
+          relevantImports[0],
+          tsModule.SyntaxKind.FromKeyword
+        )[0].getStart();
 
       return insertAfterLastOccurrence(
         imports,
@@ -631,9 +646,10 @@ export function insertImport(
   }
 
   // no such import declaration exists
-  const useStrict = findNodes(rootNode, ts.SyntaxKind.StringLiteral).filter(
-    (n: ts.StringLiteral) => n.text === 'use strict'
-  );
+  const useStrict = findNodes(
+    rootNode,
+    tsModule.SyntaxKind.StringLiteral
+  ).filter((n: ts.StringLiteral) => n.text === 'use strict');
   let fallbackPos = 0;
   if (useStrict.length > 0) {
     fallbackPos = useStrict[0].end;
@@ -652,7 +668,7 @@ export function insertImport(
     toInsert,
     fileToEdit,
     fallbackPos,
-    ts.SyntaxKind.StringLiteral
+    tsModule.SyntaxKind.StringLiteral
   );
 }
 

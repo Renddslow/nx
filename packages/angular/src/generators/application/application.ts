@@ -1,5 +1,6 @@
 import {
   formatFiles,
+  GeneratorCallback,
   installPackagesTask,
   moveFilesToNewDirectory,
   readNxJson,
@@ -39,7 +40,7 @@ import { lt } from 'semver';
 export async function applicationGenerator(
   tree: Tree,
   schema: Partial<Schema>
-) {
+): Promise<GeneratorCallback> {
   const installedAngularVersionInfo = getInstalledAngularVersionInfo(tree);
 
   if (lt(installedAngularVersionInfo.version, '14.1.0') && schema.standalone) {

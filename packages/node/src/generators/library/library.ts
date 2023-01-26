@@ -3,6 +3,7 @@ import {
   extractLayoutDirectory,
   formatFiles,
   generateFiles,
+  GeneratorCallback,
   getWorkspaceLayout,
   joinPathFragments,
   names,
@@ -15,8 +16,10 @@ import {
 } from '@nrwl/devkit';
 import { getImportPath } from 'nx/src/utils/path';
 import { Schema } from './schema';
-import { libraryGenerator as workspaceLibraryGenerator } from '@nrwl/workspace/generators';
+import { libraryGenerator as workspaceLibraryGenerator } from '@nrwl/workspace/src/generators/library/library';
+import { runTasksInSerial } from '@nrwl/workspace/src/utilities/run-tasks-in-serial';
 import { join } from 'path';
+import { initGenerator } from '../init/init';
 
 export interface NormalizedSchema extends Schema {
   name: string;
@@ -30,6 +33,12 @@ export interface NormalizedSchema extends Schema {
 
 export async function libraryGenerator(tree: Tree, schema: Schema) {
   const options = normalizeOptions(tree, schema);
+  const tasks: GeneratorCallback[] = [
+    await initGenerator(tree, {
+      ...options,
+      skipFormat: true,
+    }),
+  ];
 
   if (options.publishable === true && !schema.importPath) {
     throw new Error(
@@ -44,6 +53,7 @@ export async function libraryGenerator(tree: Tree, schema: Schema) {
     skipFormat: true,
     setParserOptionsProject: options.setParserOptionsProject,
   });
+  tasks.push(libraryInstall);
   createFiles(tree, options);
 
   if (options.js) {
@@ -55,7 +65,7 @@ export async function libraryGenerator(tree: Tree, schema: Schema) {
     await formatFiles(tree);
   }
 
-  return libraryInstall;
+  return runTasksInSerial(...tasks);
 }
 
 export default libraryGenerator;
